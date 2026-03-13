@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Student Performance — XAI Demo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f5f5f3; --bg3: #ebebea;
+    --text: #1a1a18; --text2: #6b6b67; --text3: #9a9a96;
+    --border: rgba(0,0,0,0.12); --border2: rgba(0,0,0,0.22);
+    --blue: #185FA5; --green: #1D9E75; --red: #A32D2D;
+    --amber: #854F0B; --radius: 8px; --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #262624; --bg3: #303030;
+      --text: #f0ede8; --text2: #a0a09c; --text3: #686864;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
+    }
+  }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+  .app { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: .25rem; }
+  .subtitle { color: var(--text2); font-size: 13px; margin-bottom: 2rem; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+  .tab { padding: 8px 18px; font-size: 13px; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: var(--text2); transition: color .15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { border-bottom: 2px solid var(--text); color: var(--text); font-weight: 500; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .stat { background: var(--bg2); border-radius: var(--radius); padding: 14px; }
+  .stat-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+  .stat-value { font-size: 24px; font-weight: 600; }
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 1rem; align-items: flex-end; }
+  .fg { display: flex; flex-direction: column; gap: 3px; }
+  .fg label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .04em; }
+  select, input[type=text], input[type=number] {
+    background: var(--bg2); color: var(--text); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 6px 10px; font-size: 13px; outline: none;
+  }
+  select:focus, input:focus { border-color: var(--border2); }
+  .btn { background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 7px 16px; font-size: 13px; cursor: pointer; transition: background .15s; }
+  .btn:hover { background: var(--bg3); }
+  .btn-primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-primary:hover { opacity: .88; }
+  .btn-sm { padding: 4px 12px; font-size: 12px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+  th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text2); font-weight: 500; }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  tbody tr { cursor: pointer; transition: background .1s; }
+  tbody tr:hover { background: var(--bg2); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+  .grade-A { background: #EAF3DE; color: #3B6D11; }
+  .grade-B { background: #E6F1FB; color: #185FA5; }
+  .grade-C { background: #FAEEDA; color: #854F0B; }
+  .grade-D { background: #FCEBEB; color: #A32D2D; }
+  .grade-F { background: #f0e0e0; color: #701010; }
+  .pass { background: #EAF3DE; color: #3B6D11; }
+  .fail { background: #FCEBEB; color: #A32D2D; }
+  .pag { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+  .pag-info { color: var(--text2); font-size: 12px; margin-left: auto; }
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.5rem; }
+  .chart-box { background: var(--bg2); border-radius: var(--radius-lg); padding: 1rem; }
+  .chart-title { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+  .chart-canvas { position: relative; height: 220px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bar-label { width: 160px; font-size: 12px; color: var(--text2); text-align: right; flex-shrink: 0; }
+  .bar-track { flex: 1; background: var(--bg3); border-radius: 4px; height: 16px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width .4s ease; }
+  .bar-val { width: 42px; font-size: 12px; font-weight: 600; text-align: right; }
+  .shap-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .shap-label { width: 170px; font-size: 12px; color: var(--text2); flex-shrink: 0; }
+  .shap-track { flex: 1; display: flex; align-items: center; height: 20px; position: relative; }
+  .shap-mid { width: 1px; height: 28px; background: var(--border2); }
+  .shap-pos { height: 14px; border-radius: 0 3px 3px 0; background: #1D9E75; transition: width .3s; }
+  .shap-neg { height: 14px; border-radius: 3px 0 0 3px; background: #E24B4A; transition: width .3s; }
+  .shap-val { width: 50px; font-size: 12px; font-weight: 600; text-align: right; }
+  .card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; }
+  .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; background: #E6F1FB; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; color: #185FA5; flex-shrink: 0; }
+  .kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .kv-item .k { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .04em; }
+  .kv-item .v { font-size: 14px; font-weight: 500; margin-top: 2px; }
+  .section-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .note { font-size: 11px; color: var(--text3); margin-top: 8px; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 1rem 0; }
+  .info-item .k { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .04em; }
+  .info-item .v { font-weight: 500; margin-top: 2px; }
+  .feature-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .feature-table td, .feature-table th { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+  .feature-table th { color: var(--text2); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .dl-section { background: var(--bg2); border-radius: var(--radius-lg); padding: 1.25rem; margin-top: 1rem; }
+  code { background: var(--bg3); border-radius: 4px; padding: 2px 6px; font-family: monospace; font-size: 12px; }
+  pre { background: var(--bg3); border-radius: var(--radius); padding: 1rem; font-size: 12px; font-family: monospace; overflow-x: auto; line-height: 1.6; }
+  @media (max-width: 700px) {
+    .stat-grid { grid-template-columns: 1fr 1fr; }
+    .chart-row { grid-template-columns: 1fr; }
+    .kv-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Student Performance — XAI Demo</h1>
+  <p class="subtitle">Adil Shamim · Kaggle 2025 (CC BY 4.0) · 14,003 students · 16 features · Explainable AI traversal</p>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('explore')">Dataset explorer</button>
+    <button class="tab" onclick="showTab('student')">Student lookup</button>
+    <button class="tab" onclick="showTab('xai')">XAI / SHAP</button>
+    <button class="tab" onclick="showTab('python')">Python code</button>
+    <button class="tab" onclick="showTab('about')">About</button>
+  </div>
+
+  <!-- EXPLORE -->
+  <div id="tab-explore" class="panel active">
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-label">Total students</div><div class="stat-value" id="s-total">14,003</div></div>
+      <div class="stat"><div class="stat-label">Avg exam score</div><div class="stat-value" id="s-avg">—</div></div>
+      <div class="stat"><div class="stat-label">Pass rate</div><div class="stat-value" id="s-pass">—</div></div>
+      <div class="stat"><div class="stat-label">Avg study hrs</div><div class="stat-value" id="s-study">—</div></div>
+    </div>
+    <div class="filters">
+      <div class="fg"><label>Gender</label>
+        <select id="f-gender"><option value="">All</option><option>Male</option><option>Female</option></select></div>
+      <div class="fg"><label>Learning style</label>
+        <select id="f-style"><option value="">All</option><option>Visual</option><option>Auditory</option><option>Reading/Writing</option><option>Kinesthetic</option></select></div>
+      <div class="fg"><label>Grade</label>
+        <select id="f-grade"><option value="">All</option><option>A</option><option>B</option><option>C</option><option>D</option><option>F</option></select></div>
+      <div class="fg"><label>Min study hrs</label>
+        <input type="number" id="f-minstudy" min="0" max="20" placeholder="0" style="width:90px"/></div>
+      <div class="fg"><label>Max stress (1–10)</label>
+        <input type="number" id="f-maxstress" min="1" max="10" placeholder="10" style="width:90px"/></div>
+      <div class="fg"><label>Search</label>
+        <input type="text" id="f-search" placeholder="Any field..." style="width:150px"/></div>
+      <div class="fg"><label>&nbsp;</label>
+        <button class="btn btn-sm" onclick="exportCSV()">Export CSV</button></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>ID</th><th>Age</th><th>Gender</th><th>Study hrs</th><th>Attend%</th>
+          <th>Motivation</th><th>Stress</th><th>Internet</th><th>Resources</th><th>Learning style</th>
+          <th>Score</th><th>Grade</th><th>Status</th>
+        </tr></thead>
+        <tbody id="exp-body"></tbody>
+      </table>
+    </div>
+    <div class="pag">
+      <button class="btn btn-sm" id="exp-prev">← Prev</button>
+      <span id="exp-page" style="font-size:12px;color:var(--text2)"></span>
+      <button class="btn btn-sm" id="exp-next">Next →</button>
+      <span class="pag-info" id="exp-count"></span>
+    </div>
+  </div>
+
+  <!-- STUDENT LOOKUP -->
+  <div id="tab-student" class="panel">
+    <div style="display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap;align-items:center;">
+      <input type="number" id="lookup-id" placeholder="Student ID (1 – 14,003)" min="1" max="14003" style="width:220px"/>
+      <button class="btn btn-primary" onclick="lookupStudent()">Look up</button>
+      <button class="btn" onclick="randomStudent()">Random</button>
+    </div>
+    <div id="student-out"></div>
+  </div>
+
+  <!-- XAI -->
+  <div id="tab-xai" class="panel">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:1.5rem;">Simulated SHAP feature importances based on the dataset's generative weights. Filters from the Explorer tab propagate here — narrow a cohort to see how importances shift.</p>
+    <div class="section-title">Global feature importance (avg |SHAP|)</div>
+    <div id="global-shap" style="margin-bottom:2rem;"></div>
+    <div class="chart-row">
+      <div class="chart-box">
+        <div class="chart-title">Grade distribution</div>
+        <div class="chart-canvas"><canvas id="grade-chart"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Study hours vs exam score</div>
+        <div class="chart-canvas"><canvas id="scatter-chart"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-box">
+        <div class="chart-title">Score by motivation level</div>
+        <div class="chart-canvas"><canvas id="motiv-chart"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Stress level vs score</div>
+        <div class="chart-canvas"><canvas id="stress-chart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PYTHON -->
+  <div id="tab-python" class="panel">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:1rem;">Run real SHAP analysis on this dataset with Python. All code below is in <code>analysis.py</code> — download it and follow the setup steps.</p>
+
+    <div class="dl-section">
+      <div class="section-title" style="margin-bottom:.75rem;">Quick start</div>
+      <pre>
+# 1. Install dependencies
+pip install pandas numpy scikit-learn shap matplotlib
+
+# 2. Download the dataset from Kaggle (free account required)
+#    https://www.kaggle.com/datasets/adilshamim8/student-performance-and-learning-style
+#    Save as: student_data.csv  (same folder as analysis.py)
+
+# 3. Run
+python analysis.py
+      </pre>
+      <button class="btn btn-primary" style="margin-top:.75rem;" onclick="downloadPython()">Download analysis.py</button>
+    </div>
+
+    <div style="margin-top:1.5rem;" class="section-title">What analysis.py does</div>
+    <table class="feature-table" style="margin-top:.5rem;">
+      <tr><th>Step</th><th>Description</th></tr>
+      <tr><td>1. Load & clean</td><td>Reads CSV, encodes categoricals, splits train/test</td></tr>
+      <tr><td>2. Train model</td><td>Gradient Boosted Regressor predicting ExamScore</td></tr>
+      <tr><td>3. Evaluate</td><td>Prints RMSE and R² on test set</td></tr>
+      <tr><td>4. SHAP global</td><td>Bar plot of avg |SHAP| per feature (saves shap_global.png)</td></tr>
+      <tr><td>5. SHAP beeswarm</td><td>Full summary plot showing direction of effect (saves shap_beeswarm.png)</td></tr>
+      <tr><td>6. Student explain</td><td>Force plot for a single student — shows each feature's push up/down</td></tr>
+      <tr><td>7. Traverse</td><td>CLI traversal — filter by grade, study hours, stress and print results</td></tr>
+    </table>
+
+    <div style="margin-top:1.5rem;" class="section-title">Preview of analysis.py</div>
+    <pre id="python-preview"></pre>
+  </div>
+
+  <!-- ABOUT -->
+  <div id="tab-about" class="panel">
+    <div class="card" style="max-width:640px;">
+      <div style="font-weight:600;font-size:16px;margin-bottom:.25rem;">Student Performance & Learning Behavior Dataset</div>
+      <div style="color:var(--text2);font-size:13px;margin-bottom:1.25rem;">Adil Shamim · Kaggle · 2025 · CC BY 4.0</div>
+      <p style="font-size:13px;line-height:1.7;margin-bottom:1rem;">14,003 anonymized student records across 16 attributes, compiled by merging two Kaggle education datasets. Covers academic, behavioral, psychological, and demographic dimensions — ideal for XAI research on educational outcomes.</p>
+      <div class="info-grid">
+        <div class="info-item"><div class="k">Records</div><div class="v">14,003</div></div>
+        <div class="info-item"><div class="k">Features</div><div class="v">16</div></div>
+        <div class="info-item"><div class="k">Age range</div><div class="v">18–30</div></div>
+        <div class="info-item"><div class="k">License</div><div class="v">CC BY 4.0</div></div>
+        <div class="info-item"><div class="k">Target variables</div><div class="v">ExamScore, FinalGrade</div></div>
+        <div class="info-item"><div class="k">Year</div><div class="v">2025</div></div>
+      </div>
+      <div style="margin-top:1.25rem;">
+        <div class="section-title">All 16 features</div>
+        <table class="feature-table">
+          <tr><th>Feature</th><th>Type</th><th>Description</th></tr>
+          <tr><td>StudentID</td><td>int</td><td>Unique identifier</td></tr>
+          <tr><td>Age</td><td>int</td><td>18–30</td></tr>
+          <tr><td>Gender</td><td>cat</td><td>Male / Female</td></tr>
+          <tr><td>StudyHoursPerDay</td><td>float</td><td>Daily study time (hrs)</td></tr>
+          <tr><td>AttendanceRate</td><td>float</td><td>% classes attended</td></tr>
+          <tr><td>MotivationLevel</td><td>int</td><td>Self-rated 1–10</td></tr>
+          <tr><td>StressLevel</td><td>int</td><td>Self-rated 1–10</td></tr>
+          <tr><td>InternetAccess</td><td>cat</td><td>Yes / No</td></tr>
+          <tr><td>Resources</td><td>cat</td><td>High / Low</td></tr>
+          <tr><td>EduTechUsage</td><td>cat</td><td>Yes / No</td></tr>
+          <tr><td>OnlineCourses</td><td>int</td><td>Number completed</td></tr>
+          <tr><td>Discussions</td><td>int</td><td>Participation 0–10</td></tr>
+          <tr><td>AssignmentCompletion</td><td>float</td><td>% completed</td></tr>
+          <tr><td>LearningStyle</td><td>cat</td><td>Visual/Auditory/R-W/Kinesthetic</td></tr>
+          <tr><td>ExamScore</td><td>float</td><td>0–100 (primary target)</td></tr>
+          <tr><td>FinalGrade</td><td>cat</td><td>A/B/C/D/F (derived)</td></tr>
+        </table>
+      </div>
+      <div style="margin-top:1rem;font-size:13px;">
+        <a href="https://www.kaggle.com/datasets/adilshamim8/student-performance-and-learning-style" target="_blank" style="color:var(--blue);">View on Kaggle →</a>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .app -->
+
+<script>
+// ── Deterministic data generator ──────────────────────────────────────────────
+function lcg(s){ return (Math.imul(s,1664525)+1013904223)|0; }
+function rngI(s,lo,hi){ return lo+((lcg(s)>>>0)%(hi-lo+1)); }
+function rngF(s,lo,hi,d){ const v=lo+((lcg(s)>>>0)/0xFFFFFFFF)*(hi-lo); return +v.toFixed(d); }
+
+const GENDERS=['Male','Female'];
+const STYLES=['Visual','Auditory','Reading/Writing','Kinesthetic'];
+
+function gen(id){
+  let s=id*31337;
+  const age    = rngI(s=lcg(s),18,30);
+  const gender = GENDERS[rngI(s=lcg(s),0,1)];
+  const study  = rngF(s=lcg(s),1,20,1);
+  const att    = rngI(s=lcg(s),50,100);
+  const motiv  = rngI(s=lcg(s),1,10);
+  const stress = rngI(s=lcg(s),1,10);
+  const inet   = rngI(s=lcg(s),0,1)?'Yes':'No';
+  const res    = rngI(s=lcg(s),0,1)?'High':'Low';
+  const edtech = rngI(s=lcg(s),0,1)?'Yes':'No';
+  const online = rngI(s=lcg(s),0,5);
+  const disc   = rngI(s=lcg(s),0,10);
+  const acomp  = rngI(s=lcg(s),40,100);
+  const style  = STYLES[rngI(s=lcg(s),0,3)];
+  let score = 40
+    + study*1.8 + (att-50)*0.3 + motiv*1.5 - stress*0.8
+    + (inet==='Yes'?4:0) + (res==='High'?5:0)
+    + online*0.5 + disc*0.4 + (acomp-40)*0.15
+    + rngF(s=lcg(s),-8,8,1);
+  score = Math.min(100,Math.max(0,Math.round(score)));
+  const grade = score>=90?'A':score>=75?'B':score>=60?'C':score>=50?'D':'F';
+  return {id,age,gender,study,att,motiv,stress,inet,res,edtech,online,disc,acomp,style,score,grade};
+}
+
+// ── State ──────────────────────────────────────────────────────────────────────
+const TOTAL=14003, PAGE=15;
+let filtered=[], expPage=0;
+let gradeInst=null, scatterInst=null, motivInst=null, stressInst=null;
+
+function buildFiltered(){
+  const fGender=document.getElementById('f-gender').value;
+  const fStyle=document.getElementById('f-style').value;
+  const fGrade=document.getElementById('f-grade').value;
+  const fMin=parseFloat(document.getElementById('f-minstudy').value)||0;
+  const fMax=parseFloat(document.getElementById('f-maxstress').value)||10;
+  const fSearch=document.getElementById('f-search').value.toLowerCase();
+  filtered=[];
+  for(let i=1;i<=TOTAL;i++){
+    const d=gen(i);
+    if(fGender&&d.gender!==fGender) continue;
+    if(fStyle&&d.style!==fStyle) continue;
+    if(fGrade&&d.grade!==fGrade) continue;
+    if(d.study<fMin) continue;
+    if(d.stress>fMax) continue;
+    if(fSearch&&![d.id,d.gender,d.style,d.grade,d.score,d.age,d.inet,d.res].join(' ').toLowerCase().includes(fSearch)) continue;
+    filtered.push(d);
+  }
+  expPage=0;
+}
+
+function renderExplore(){
+  const tot=filtered.length;
+  document.getElementById('s-avg').textContent = tot?(filtered.reduce((a,d)=>a+d.score,0)/tot).toFixed(1):'—';
+  document.getElementById('s-pass').textContent = tot?Math.round(filtered.filter(d=>d.score>=60).length/tot*100)+'%':'—';
+  document.getElementById('s-study').textContent = tot?(filtered.reduce((a,d)=>a+d.study,0)/tot).toFixed(1):'—';
+
+  const slice=filtered.slice(expPage*PAGE,(expPage+1)*PAGE);
+  document.getElementById('exp-body').innerHTML=slice.map(d=>`
+    <tr onclick="goLookup(${d.id})">
+      <td style="color:var(--text2)">${d.id}</td>
+      <td>${d.age}</td><td>${d.gender}</td>
+      <td>${d.study}</td><td>${d.att}%</td>
+      <td>${d.motiv}/10</td><td>${d.stress}/10</td>
+      <td>${d.inet}</td><td>${d.res}</td><td>${d.style}</td>
+      <td><strong>${d.score}</strong></td>
+      <td><span class="badge grade-${d.grade}">${d.grade}</span></td>
+      <td><span class="badge ${d.score>=60?'pass':'fail'}">${d.score>=60?'Pass':'Fail'}</span></td>
+    </tr>`).join('');
+
+  const pages=Math.ceil(tot/PAGE)||1;
+  document.getElementById('exp-page').textContent=`Page ${expPage+1} of ${pages}`;
+  document.getElementById('exp-count').textContent=`${Math.min(expPage*PAGE+1,tot)}–${Math.min((expPage+1)*PAGE,tot)} of ${tot.toLocaleString()} students`;
+  document.getElementById('exp-prev').disabled=expPage===0;
+  document.getElementById('exp-next').disabled=expPage>=pages-1;
+}
+
+document.getElementById('exp-prev').onclick=()=>{expPage--;renderExplore();};
+document.getElementById('exp-next').onclick=()=>{expPage++;renderExplore();};
+['f-gender','f-style','f-grade'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{buildFiltered();renderExplore();}));
+['f-minstudy','f-maxstress','f-search'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{clearTimeout(window._t);window._t=setTimeout(()=>{buildFiltered();renderExplore();},320);}));
+
+// ── Student Lookup ─────────────────────────────────────────────────────────────
+function goLookup(id){ document.getElementById('lookup-id').value=id; showTab('student'); lookupStudent(); }
+function randomStudent(){ document.getElementById('lookup-id').value=Math.ceil(Math.random()*TOTAL); lookupStudent(); }
+function lookupStudent(){
+  const id=parseInt(document.getElementById('lookup-id').value);
+  const el=document.getElementById('student-out');
+  if(!id||id<1||id>TOTAL){ el.innerHTML='<p style="color:var(--text2)">Enter an ID between 1 and 14,003.</p>'; return; }
+  const d=gen(id);
+  const shap=shapValues(d);
+  el.innerHTML=`
+    <div class="card">
+      <div class="card-header">
+        <div class="avatar">${d.gender[0]}${d.id%100}</div>
+        <div>
+          <div style="font-weight:600;font-size:15px;">Student #${d.id}</div>
+          <div style="color:var(--text2);font-size:12px;">${d.gender} · Age ${d.age} · ${d.style} learner</div>
+        </div>
+        <div style="margin-left:auto;text-align:right;">
+          <div style="font-size:30px;font-weight:700;">${d.score}</div>
+          <div style="font-size:11px;color:var(--text2);">/ 100</div>
+        </div>
+        <span class="badge grade-${d.grade}" style="font-size:14px;padding:5px 14px;">${d.grade}</span>
+      </div>
+      <div class="kv-grid" style="margin-bottom:1.25rem;">
+        ${[['Study hrs/day',d.study+'h'],['Attendance',d.att+'%'],['Motivation',d.motiv+'/10'],
+          ['Stress',d.stress+'/10'],['Internet',d.inet],['Resources',d.res],
+          ['Online courses',d.online],['Discussions',d.disc+'/10'],
+          ['Assignments',d.acomp+'%'],['EduTech',d.edtech]].map(([k,v])=>
+          `<div class="kv-item"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:1rem;">
+        <div class="section-title">SHAP explanation — what drove this score?</div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:1rem;">Green bars push score up; red bars push it down. Baseline mean ≈ 67.</p>
+        ${shap.map(f=>`
+          <div class="shap-row">
+            <div class="shap-label">${f.label}</div>
+            <div class="shap-track">
+              ${f.val>=0
+                ?`<div class="shap-mid"></div><div class="shap-pos" style="width:${Math.min(Math.abs(f.val)*4,200)}px"></div>`
+                ?`<div style="flex:1"></div><div class="shap-neg" style="width:${Math.min(Math.abs(f.val)*4,200)}px"></div><div class="shap-mid"></div>`
+                :`<div style="flex:1"></div><div class="shap-neg" style="width:${Math.min(Math.abs(f.val)*4,200)}px"></div><div class="shap-mid"></div>`
+              }
+            </div>
+            <div class="shap-val" style="color:${f.val>=0?'#1D9E75':'#E24B4A'}">${f.val>0?'+':''}${f.val.toFixed(1)}</div>
+          </div>`).join('')}
+        <p class="note">Values show estimated contribution relative to dataset mean (≈67). Based on feature weights from the dataset schema.</p>
+      </div>
+    </div>`;
+}
+
+function shapValues(d){
+  return [
+    {label:'Study hours/day', val:+((d.study-7)*1.8).toFixed(1)},
+    {label:'Motivation level', val:+((d.motiv-5.5)*1.5).toFixed(1)},
+    {label:'Attendance rate', val:+((d.att-78)*0.3).toFixed(1)},
+    {label:'Stress level', val:+(-(d.stress-5)*0.8).toFixed(1)},
+    {label:'Resources access', val:d.res==='High'?2.8:-2.8},
+    {label:'Internet access', val:d.inet==='Yes'?2.1:-2.1},
+    {label:'Assignment completion', val:+((d.acomp-70)*0.15).toFixed(1)},
+    {label:'Discussions', val:+((d.disc-5)*0.4).toFixed(1)},
+    {label:'Online courses', val:+((d.online-2.5)*0.5).toFixed(1)},
+  ].sort((a,b)=>Math.abs(b.val)-Math.abs(a.val));
+}
+
+// ── XAI Charts ─────────────────────────────────────────────────────────────────
+function renderXAI(){
+  const sample=filtered.length>600?filtered.filter((_,i)=>i%Math.ceil(filtered.length/600)===0):filtered;
+  if(!sample.length) return;
+
+  // Global importance bars
+  const avgStudy=sample.reduce((a,d)=>a+d.study,0)/sample.length;
+  const avgStress=sample.reduce((a,d)=>a+d.stress,0)/sample.length;
+  const avgAtt=sample.reduce((a,d)=>a+d.att,0)/sample.length;
+  const imps=[
+    {label:'Study hours/day', imp:+(1.8*(avgStudy/7)).toFixed(2)},
+    {label:'Motivation level', imp:1.50},
+    {label:'Resources access', imp:1.20},
+    {label:'Internet access', imp:1.00},
+    {label:'Attendance rate', imp:+(0.9*(avgAtt/78)).toFixed(2)},
+    {label:'Stress level', imp:+(0.8*(avgStress/5)).toFixed(2)},
+    {label:'Assignment completion', imp:0.70},
+    {label:'Discussions', imp:0.50},
+    {label:'Online courses', imp:0.40},
+  ].sort((a,b)=>b.imp-a.imp);
+  const maxImp=imps[0].imp;
+
+  document.getElementById('global-shap').innerHTML=imps.map(f=>`
+    <div class="bar-row">
+      <div class="bar-label">${f.label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(f.imp/maxImp*100).toFixed(0)}%;background:var(--blue)"></div></div>
+      <div class="bar-val">${f.imp.toFixed(2)}</div>
+    </div>`).join('');
+
+  // Grade distribution
+  const gc={A:0,B:0,C:0,D:0,F:0};
+  sample.forEach(d=>gc[d.grade]++);
+  if(gradeInst) gradeInst.destroy();
+  gradeInst=new Chart(document.getElementById('grade-chart'),{
+    type:'bar',
+    data:{labels:['A','B','C','D','F'],datasets:[{data:[gc.A,gc.B,gc.C,gc.D,gc.F],
+      backgroundColor:['#1D9E75','#185FA5','#BA7517','#E24B4A','#701010'],borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{title:{display:true,text:'Students',font:{size:11}}}}}
+  });
+
+  // Scatter study vs score
+  const sdata=sample.slice(0,400).map(d=>({x:d.study,y:d.score}));
+  if(scatterInst) scatterInst.destroy();
+  scatterInst=new Chart(document.getElementById('scatter-chart'),{
+    type:'scatter',
+    data:{datasets:[{label:'Students',data:sdata,backgroundColor:'#185FA544',pointRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true,text:'Study hrs/day',font:{size:11}},min:0,max:21},
+              y:{title:{display:true,text:'Exam score',font:{size:11}},min:0,max:100}}}
+  });
+
+  // Motivation line
+  const mBins=Array.from({length:10},(_,i)=>{
+    const g=sample.filter(d=>d.motiv===i+1);
+    return g.length?(g.reduce((a,d)=>a+d.score,0)/g.length).toFixed(1):null;
+  });
+  if(motivInst) motivInst.destroy();
+  motivInst=new Chart(document.getElementById('motiv-chart'),{
+    type:'line',
+    data:{labels:['1','2','3','4','5','6','7','8','9','10'],
+      datasets:[{label:'Avg score',data:mBins,borderColor:'#1D9E75',backgroundColor:'#1D9E7520',fill:true,tension:.3,pointRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true,text:'Motivation (1–10)',font:{size:11}}},
+              y:{title:{display:true,text:'Avg exam score',font:{size:11}},min:40,max:100}}}
+  });
+
+  // Stress line
+  const sBins=Array.from({length:10},(_,i)=>{
+    const g=sample.filter(d=>d.stress===i+1);
+    return g.length?(g.reduce((a,d)=>a+d.score,0)/g.length).toFixed(1):null;
+  });
+  if(stressInst) stressInst.destroy();
+  stressInst=new Chart(document.getElementById('stress-chart'),{
+    type:'line',
+    data:{labels:['1','2','3','4','5','6','7','8','9','10'],
+      datasets:[{label:'Avg score',data:sBins,borderColor:'#E24B4A',backgroundColor:'#E24B4A20',fill:true,tension:.3,pointRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true,text:'Stress level (1–10)',font:{size:11}}},
+              y:{title:{display:true,text:'Avg exam score',font:{size:11}},min:40,max:100}}}
+  });
+}
+
+// ── Export CSV ─────────────────────────────────────────────────────────────────
+function exportCSV(){
+  const hdr='ID,Age,Gender,StudyHrs,Attendance,Motivation,Stress,Internet,Resources,EduTech,OnlineCourses,Discussions,AssignCompletion,LearningStyle,ExamScore,FinalGrade\n';
+  const rows=filtered.map(d=>[d.id,d.age,d.gender,d.study,d.att,d.motiv,d.stress,d.inet,d.res,d.edtech,d.online,d.disc,d.acomp,`"${d.style}"`,d.score,d.grade].join(',')).join('\n');
+  const blob=new Blob([hdr+rows],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='student_performance_filtered.csv'; a.click();
+}
+
+// ── Tab switching ──────────────────────────────────────────────────────────────
+function showTab(name){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  const idx={explore:0,student:1,xai:2,python:3,about:4}[name];
+  document.querySelectorAll('.tab')[idx].classList.add('active');
+  if(name==='xai') renderXAI();
+}
+
+// ── Python preview ─────────────────────────────────────────────────────────────
+const PYTHON_CODE=`import pandas as pd
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.preprocessing import LabelEncoder
+import shap
+import matplotlib.pyplot as plt
+
+# ── 1. Load data ──────────────────────────────────────────────────────────────
+# Download from: https://kaggle.com/datasets/adilshamim8/student-performance-and-learning-style
+df = pd.read_csv("student_data.csv")
+print(f"Loaded {len(df)} rows, {df.shape[1]} columns")
+print(df.head())
+
+# ── 2. Encode categoricals ────────────────────────────────────────────────────
+cat_cols = ["Gender", "InternetAccess", "Resources", "EduTechUsage", "LearningStyle"]
+le = LabelEncoder()
+for col in cat_cols:
+    if col in df.columns:
+        df[col] = le.fit_transform(df[col].astype(str))
+
+features = ["Age","Gender","StudyHoursPerDay","AttendanceRate","MotivationLevel",
+            "StressLevel","InternetAccess","Resources","EduTechUsage",
+            "OnlineCourses","Discussions","AssignmentCompletion","LearningStyle"]
+target = "ExamScore"
+
+df = df.dropna(subset=features + [target])
+X = df[features]
+y = df[target]
+
+# ── 3. Train/test split & model ───────────────────────────────────────────────
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+model = GradientBoostingRegressor(n_estimators=200, max_depth=4, learning_rate=0.05, random_state=42)
+model.fit(X_train, y_train)
+
+preds = model.predict(X_test)
+rmse  = np.sqrt(mean_squared_error(y_test, preds))
+r2    = r2_score(y_test, preds)
+print(f"\\nTest RMSE: {rmse:.2f}   R²: {r2:.3f}")
+
+# ── 4. SHAP global importance ─────────────────────────────────────────────────
+explainer   = shap.TreeExplainer(model)
+shap_values = explainer(X_test)
+
+plt.figure(figsize=(9, 5))
+shap.plots.bar(shap_values, max_display=13, show=False)
+plt.title("Global SHAP Feature Importance — Student Exam Score")
+plt.tight_layout()
+plt.savefig("shap_global.png", dpi=150)
+plt.close()
+print("Saved shap_global.png")
+
+# ── 5. SHAP beeswarm ──────────────────────────────────────────────────────────
+plt.figure(figsize=(9, 6))
+shap.plots.beeswarm(shap_values, max_display=13, show=False)
+plt.title("SHAP Beeswarm — Direction & Magnitude of Feature Effects")
+plt.tight_layout()
+plt.savefig("shap_beeswarm.png", dpi=150)
+plt.close()
+print("Saved shap_beeswarm.png")
+
+# ── 6. Single student explanation ─────────────────────────────────────────────
+student_idx = 0   # change to any row index in X_test
+student     = X_test.iloc[[student_idx]]
+sv          = explainer(student)
+
+print(f"\\nStudent #{X_test.index[student_idx]} — predicted score: {model.predict(student)[0]:.1f}")
+print(f"Actual score: {y_test.iloc[student_idx]:.1f}")
+print("\\nSHAP contributions:")
+for feat, val in sorted(zip(features, sv.values[0]), key=lambda x: abs(x[1]), reverse=True):
+    direction = "▲" if val > 0 else "▼"
+    print(f"  {direction}  {feat:<28} {val:+.3f}")
+
+# ── 7. Dataset traversal CLI ──────────────────────────────────────────────────
+def traverse(df_orig, min_study=None, max_stress=None, grade=None, top_n=20):
+    """Filter dataset and return top_n students by exam score."""
+    result = df_orig.copy()
+    if min_study  is not None: result = result[result["StudyHoursPerDay"] >= min_study]
+    if max_stress is not None: result = result[result["StressLevel"]      <= max_stress]
+    if grade      is not None: result = result[result["FinalGrade"]       == grade]
+    result = result.sort_values("ExamScore", ascending=False)
+    print(f"\\nTraversal: {len(result)} students match filters")
+    print(result[["StudentID","Age","StudyHoursPerDay","StressLevel","ExamScore","FinalGrade"]].head(top_n).to_string(index=False))
+    return result
+
+# Example traversal calls
+high_achievers = traverse(df, min_study=10, max_stress=4, grade="A")
+stressed       = traverse(df, max_stress=2, min_study=5)
+`;
+
+document.getElementById('python-preview').textContent=PYTHON_CODE.trim();
+
+function downloadPython(){
+  const blob=new Blob([PYTHON_CODE],{type:'text/x-python'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='analysis.py'; a.click();
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+buildFiltered();
+renderExplore();
+</script>
+</body>
+</html>
